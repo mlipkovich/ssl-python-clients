@@ -20,15 +20,14 @@ class ErForceClient(VisionClient):
 
     _socket_writer: SocketWriter = attr.ib(init=False)
     _loop_sender: multiprocessing.Process = attr.ib(init=False)
-    _last_package: typing.List[typing.Optional[bytes]] = attr.ib(init=False)
+    _last_packages: typing.Dict[int, bytes] = attr.ib(init=False)
 
     def __attrs_post_init__(self) -> None:
         super(ErForceClient, self).__attrs_post_init__()
         self._socket_writer = SocketWriter(ip=self.er_force_listen_ip, port=self.er_force_listen_port)
         if self.should_loop_commands:
             manager = multiprocessing.Manager()
-            self._last_package = manager.list()
-            self._last_package.append(None)
+            self._last_packages = manager.dict()
             self._loop_sender = multiprocessing.Process(target=self._send_loop)
             self._loop_sender.start()
 
@@ -62,7 +61,7 @@ class ErForceClient(VisionClient):
         packet.robot_commands.append(pb_command)
         package = packet.SerializeToString()
         if self.should_loop_commands:
-            self._last_package[0] = package
+            self._last_packages[command.robot_id] = package
         else:
             self._send(package)
 
@@ -71,6 +70,5 @@ class ErForceClient(VisionClient):
 
     def _send_loop(self):
         while True:
-            last_package = self._last_package[0]
-            if last_package:
+            for robot_id, last_package in self._last_packages.items():
                 self._send(last_package)
