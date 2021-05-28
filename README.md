@@ -13,6 +13,12 @@ from erforce.client import ErForceClient
 client = ErForceClient()
 ```
 
+**Client creation with commands looping:**
+```python
+from erforce.client import ErForceClient
+client = ErForceClient(should_loop_commands=True)
+```
+
 **Command creation:**
 ```python
 from erforce.model import RobotCommand, MoveLocalVelocity

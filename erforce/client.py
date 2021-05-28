@@ -1,4 +1,5 @@
-import socket
+import multiprocessing
+import typing
 
 import attr
 
@@ -11,14 +12,25 @@ from erforce.pb import RobotControl as ProtoRobotCommand, RobotCommand as ProtoR
 
 @attr.s(auto_attribs=True, kw_only=True)
 class ErForceClient(VisionClient):
+
+    should_loop_commands: bool = False
+
     er_force_listen_ip: str = '127.0.0.1'
     er_force_listen_port: int = 10301
 
     _socket_writer: SocketWriter = attr.ib(init=False)
+    _loop_sender: multiprocessing.Process = attr.ib(init=False)
+    _last_package: typing.List[typing.Optional[bytes]] = attr.ib(init=False)
 
     def __attrs_post_init__(self) -> None:
         super(ErForceClient, self).__attrs_post_init__()
         self._socket_writer = SocketWriter(ip=self.er_force_listen_ip, port=self.er_force_listen_port)
+        if self.should_loop_commands:
+            manager = multiprocessing.Manager()
+            self._last_package = manager.list()
+            self._last_package.append(None)
+            self._loop_sender = multiprocessing.Process(target=self._send_loop)
+            self._loop_sender.start()
 
     def send_action_command(self, command: RobotCommand) -> None:
         packet = ProtoRobotControl()
@@ -48,4 +60,17 @@ class ErForceClient(VisionClient):
             raise Exception(f"Unsupported command {move_command}")
 
         packet.robot_commands.append(pb_command)
-        self._socket_writer.send_package(packet.SerializeToString())
+        package = packet.SerializeToString()
+        if self.should_loop_commands:
+            self._last_package[0] = package
+        else:
+            self._send(package)
+
+    def _send(self, package: bytes):
+        self._socket_writer.send_package(package)
+
+    def _send_loop(self):
+        while True:
+            last_package = self._last_package[0]
+            if last_package:
+                self._send(last_package)

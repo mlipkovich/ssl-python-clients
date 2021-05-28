@@ -2,7 +2,7 @@ import typing
 
 import attr
 
-from common.detections import Team
+from common.vision_model import Team
 
 
 @attr.s(auto_attribs=True, kw_only=True)
